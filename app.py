@@ -343,9 +343,16 @@ def submit_bulk_urls(api_key: str, host: str, urls: list, key_location: str = ""
         return {"status": 0, "message": f"Error: {str(e)}", "count": len(urls)}
 
 
+# Browser-like User-Agent to reduce 403 from servers that block bots
+SITEMAP_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/xml, text/xml, */*",
+}
+
+
 def fetch_sitemap(sitemap_url: str) -> list:
     """Fetch and parse a sitemap XML, returning a list of URLs."""
-    resp = requests.get(sitemap_url, timeout=30, headers={"User-Agent": "IndexNow-Tool/1.0"})
+    resp = requests.get(sitemap_url, timeout=30, headers=SITEMAP_HEADERS)
     resp.raise_for_status()
     root = ET.fromstring(resp.content)
     # Handle namespace
@@ -573,7 +580,9 @@ with tab_sitemap:
                         st.session_state.sitemap_urls = fetched
                         st.success(f"✅ Found {len(fetched)} URLs in sitemap!")
                     except Exception as e:
+                        st.session_state.sitemap_urls = []  # Clear stale URLs so UI matches current fetch
                         st.error(f"❌ Failed to fetch sitemap: {e}")
+                        st.rerun()
 
     with col2:
         if st.button(
