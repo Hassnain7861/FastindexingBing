@@ -32,7 +32,7 @@ Then open **http://localhost:8501** in your browser.
 
 3. **Optional — Advanced settings**
    - **Python version**: 3.10 or 3.12 (default is fine)
-   - No secrets required; users enter their IndexNow API key in the app sidebar
+   - No secrets required; users enter their IndexNow API key and host in the app sidebar.
 
 Your app will get a URL like `https://your-app-name.streamlit.app`.
 

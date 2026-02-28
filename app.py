@@ -3,7 +3,7 @@ import requests
 import xml.etree.ElementTree as ET
 import json
 import time
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 
 # ──────────────────────────────────────────────────────────────────────
 # Page Config
@@ -190,10 +190,39 @@ st.markdown("""
     word-break: break-all;
 }
 
-/* Sidebar styling */
+/* Sidebar: always visible, never collapse, fixed width */
 section[data-testid="stSidebar"] {
     background: #111827 !important;
     border-right: 1px solid rgba(255,255,255,0.08) !important;
+    width: 21rem !important;
+    min-width: 21rem !important;
+    max-width: 21rem !important;
+    transform: translateX(0) !important;
+    visibility: visible !important;
+    overflow-y: auto !important;
+    flex: 0 0 21rem !important;
+}
+section[data-testid="stSidebar"] > div:first-child {
+    width: 21rem !important;
+    min-width: 21rem !important;
+}
+/* Hide the collapse toggle - may be next to sidebar or inside it */
+[data-testid="collapsedControl"],
+section[data-testid="stSidebar"] ~ [data-testid="collapsedControl"],
+[data-testid="stSidebar"] [data-testid="collapsedControl"] {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+/* Hide resize handle so sidebar width stays fixed */
+[data-testid="stSidebarResizeTrigger"],
+[data-testid="stSidebar"] [data-testid="stSidebarResizeTrigger"],
+[data-testid="stSidebar"] .resize-trigger {
+    display: none !important;
 }
 
 /* Streamlit widget overrides */
@@ -303,10 +332,6 @@ if "results" not in st.session_state:
     st.session_state.results = []
 if "sitemap_urls" not in st.session_state:
     st.session_state.sitemap_urls = []
-if "indexnow_key" not in st.session_state:
-    st.session_state.indexnow_key = ""
-if "indexnow_key_location" not in st.session_state:
-    st.session_state.indexnow_key_location = ""
 
 # ──────────────────────────────────────────────────────────────────────
 # Helper functions
@@ -467,11 +492,6 @@ def status_badge_html(code):
         return f'<span class="badge-info">{code}</span>'
 
 
-def _host_from_url(url: str) -> str:
-    """Derive IndexNow host from a URL (e.g. https://example.com/page -> example.com)."""
-    return (urlparse(url).netloc or "").strip() or ""
-
-
 # ──────────────────────────────────────────────────────────────────────
 # Header
 # ──────────────────────────────────────────────────────────────────────
@@ -479,55 +499,52 @@ st.markdown("""
 <div class="hero-header">
     <div class="logo">⚡</div>
     <h1>IndexNow Fast Indexing</h1>
-    <p>Paste a URL and submit to Bing & search engines — no forms, just index</p>
+    <p>Submit URLs to Bing & search engines instantly via IndexNow protocol</p>
 </div>
 """, unsafe_allow_html=True)
 
 # ──────────────────────────────────────────────────────────────────────
-# API key: from secrets (deploy) or session (user set once)
+# Sidebar — Configuration
 # ──────────────────────────────────────────────────────────────────────
-try:
-    _secret_key = st.secrets.get("INDEXNOW_KEY", "")
-    _secret_location = st.secrets.get("INDEXNOW_KEY_LOCATION", "")
-except Exception:
-    _secret_key = ""
-    _secret_location = ""
-
-# Session overrides secrets (so user can set key once in UI; deployer can set secrets)
-api_key = (st.session_state.indexnow_key or _secret_key or "").strip()
-key_location = (st.session_state.indexnow_key_location or _secret_location or "").strip()
-
-# Sidebar: only Settings expander (key set once, then hidden)
 with st.sidebar:
-    with st.expander("⚙️ Settings (API key)", expanded=not bool(api_key)):
-        st.caption("Required once. Host is auto-detected from your URL.")
-        key_input = st.text_input(
-            "IndexNow API key",
-            value=st.session_state.indexnow_key,
-            placeholder="Paste your key (8–128 hex chars)",
-            key="settings_key",
-            type="default",
+    st.markdown("### ⚙️ Configuration")
+    st.caption("Enter your IndexNow credentials to get started.")
+
+    api_key = st.text_input(
+        "API Key",
+        placeholder="e.g. a1b2c3d4e5f6... (8-128 hex chars)",
+        help="Your IndexNow API key (8-128 hex characters). Create one or use your existing key.",
+        type="default",
+    )
+
+    host = st.text_input(
+        "Website Host",
+        placeholder="www.example.com",
+        help="Your website domain without https://",
+    )
+
+    key_location = st.text_input(
+        "Key File Location (optional)",
+        placeholder="https://www.example.com/my-key.txt",
+        help="If your key file is not at the root, specify the full URL",
+    )
+
+    st.divider()
+
+    # Key file download
+    st.markdown("### 📄 Key File")
+    st.caption(f"Download `{api_key[:12]}...txt` and upload to your site root." if api_key else "Enter your API key above, then download the key file.")
+    if api_key:
+        st.download_button(
+            label=f"⬇️  Download {api_key[:12]}...txt",
+            data=api_key,
+            file_name=f"{api_key}.txt",
+            mime="text/plain",
         )
-        loc_input = st.text_input(
-            "Key file URL (optional)",
-            value=st.session_state.indexnow_key_location,
-            placeholder="https://yoursite.com/yourkey.txt",
-            key="settings_loc",
-        )
-        if st.button("Save", key="settings_save"):
-            st.session_state.indexnow_key = (key_input or "").strip()
-            st.session_state.indexnow_key_location = (loc_input or "").strip()
-            st.rerun()
-        if api_key:
-            st.caption(f"✓ Using key …{api_key[-6:] if len(api_key) >= 6 else api_key}")
-            if st.download_button(
-                label="Download key file",
-                data=api_key,
-                file_name=f"{api_key}.txt",
-                mime="text/plain",
-                key="dl_key_sidebar",
-            ):
-                pass
+    else:
+        st.info("Enter your API key above to generate the key file.")
+
+    st.divider()
     st.markdown(
         "<div style='text-align:center;color:#64748b;font-size:0.75rem;'>"
         "Powered by <a href='https://www.indexnow.org' target='_blank' "
@@ -536,48 +553,43 @@ with st.sidebar:
     )
 
 # ──────────────────────────────────────────────────────────────────────
-# Main: Paste URL → Submit (no tabs needed for the main action)
+# Main content — Tabs
 # ──────────────────────────────────────────────────────────────────────
-st.markdown(
-    '<div class="glass-card"><h3><span class="step-badge">⚡</span> Paste URL &amp; Index</h3>'
-    "<p style='color:#94a3b8;font-size:0.85rem;margin-bottom:0.75rem;'>"
-    "Enter any URL — host is detected automatically. Set your API key once in <strong>Settings</strong> (sidebar) if you haven't.</p></div>",
-    unsafe_allow_html=True,
+tab_single, tab_bulk, tab_sitemap, tab_curl = st.tabs(
+    ["🔗 Single URL", "📋 Bulk URLs", "🗺️ Sitemap", "💻 Curl Commands"]
 )
 
-single_url = st.text_input(
-    "URL",
-    placeholder="https://your-site.com/page",
-    key="single_url_input",
-    label_visibility="collapsed",
-)
+# ── Tab 1: Single URL ─────────────────────────────────────────────────
+with tab_single:
+    st.markdown(
+        '<div class="glass-card"><h3><span class="step-badge">1</span> Submit a Single URL</h3>'
+        "<p style='color:#94a3b8;font-size:0.85rem;margin-bottom:0.75rem;'>"
+        "Instantly notify search engines about a new or updated page.</p></div>",
+        unsafe_allow_html=True,
+    )
 
-col_submit, _ = st.columns([1, 3])
-with col_submit:
-    if st.button("🚀 Index this URL", key="btn_single", use_container_width=True):
-        if not api_key:
-            st.error("⚠️ Set your API key once in **Settings** (sidebar) to submit.")
+    single_url = st.text_input(
+        "URL to submit",
+        placeholder="https://www.example.com/new-page",
+        key="single_url_input",
+        label_visibility="collapsed",
+    )
+
+    if st.button("🚀 Submit URL", key="btn_single", use_container_width=True):
+        if not api_key or not host:
+            st.error("⚠️ Please configure your API key and host in the sidebar.")
         elif not single_url or not single_url.strip().startswith("http"):
             st.error("⚠️ Enter a valid URL to submit.")
         else:
-            host = _host_from_url(single_url.strip())
-            if not host:
-                st.error("⚠️ Could not get host from URL.")
+            with st.spinner("Submitting URL…"):
+                result = submit_single_url(api_key, host.strip(), single_url.strip(), key_location)
+                st.session_state.results.insert(0, result)
+            if result["status"] in (200, 202):
+                st.success(f"✅ {result['message']}")
             else:
-                with st.spinner("Submitting URL…"):
-                    result = submit_single_url(api_key, host, single_url.strip(), key_location)
-                    st.session_state.results.insert(0, result)
-                if result["status"] in (200, 202):
-                    st.success(f"✅ {result['message']}")
-                else:
-                    st.error(f"❌ {result['message']}")
+                st.error(f"❌ {result['message']}")
 
-# ──────────────────────────────────────────────────────────────────────
-# Tabs: Bulk, Sitemap, Curl
-# ──────────────────────────────────────────────────────────────────────
-tab_bulk, tab_sitemap, tab_curl = st.tabs(["📋 Bulk URLs", "🗺️ Sitemap", "💻 Curl Commands"])
-
-# ── Tab: Bulk URLs ────────────────────────────────────────────────────
+# ── Tab 2: Bulk URLs ──────────────────────────────────────────────────
 with tab_bulk:
     st.markdown(
         '<div class="glass-card"><h3><span class="step-badge">2</span> Submit Multiple URLs</h3>'
@@ -595,8 +607,8 @@ with tab_bulk:
     )
 
     if st.button("🚀 Submit All URLs", key="btn_bulk", use_container_width=True):
-        if not api_key:
-            st.error("⚠️ Set your API key once in **Settings** (sidebar) to submit.")
+        if not api_key or not host:
+            st.error("⚠️ Please configure your API key and host in the sidebar.")
         else:
             urls = [u.strip() for u in bulk_text.strip().split("\n") if u.strip().startswith("http")]
             if not urls:
@@ -604,40 +616,36 @@ with tab_bulk:
             elif len(urls) > MAX_URLS_PER_BATCH:
                 st.error(f"⚠️ Maximum {MAX_URLS_PER_BATCH} URLs per batch.")
             else:
-                host = _host_from_url(urls[0])
-                if not host:
-                    st.error("⚠️ Could not get host from URLs.")
-                else:
-                    progress = st.progress(0, text="Submitting URLs…")
-                    total = len(urls)
-                    success_count = 0
-                    fail_count = 0
-                    batch_size = min(500, total)
-                    batches = [urls[i : i + batch_size] for i in range(0, total, batch_size)]
+                progress = st.progress(0, text="Submitting URLs…")
+                total = len(urls)
+                success_count = 0
+                fail_count = 0
+                batch_size = min(500, total)
+                batches = [urls[i : i + batch_size] for i in range(0, total, batch_size)]
 
-                    for idx, batch in enumerate(batches):
-                        result = submit_bulk_urls(api_key, host, batch, key_location)
-                        if result["status"] in (200, 202):
-                            success_count += len(batch)
-                            for u in batch:
-                                st.session_state.results.insert(
-                                    0, {"url": u, "status": result["status"], "message": result["message"]}
-                                )
-                        else:
-                            fail_count += len(batch)
-                            for u in batch:
-                                st.session_state.results.insert(
-                                    0, {"url": u, "status": result["status"], "message": result["message"]}
-                                )
-                        pct = int(((idx + 1) / len(batches)) * 100)
-                        progress.progress(pct, text=f"Batch {idx+1}/{len(batches)} — {pct}%")
-                        time.sleep(0.1)  # Small delay to avoid 429
+                for idx, batch in enumerate(batches):
+                    result = submit_bulk_urls(api_key, host.strip(), batch, key_location)
+                    if result["status"] in (200, 202):
+                        success_count += len(batch)
+                        for u in batch:
+                            st.session_state.results.insert(
+                                0, {"url": u, "status": result["status"], "message": result["message"]}
+                            )
+                    else:
+                        fail_count += len(batch)
+                        for u in batch:
+                            st.session_state.results.insert(
+                                0, {"url": u, "status": result["status"], "message": result["message"]}
+                            )
+                    pct = int(((idx + 1) / len(batches)) * 100)
+                    progress.progress(pct, text=f"Batch {idx+1}/{len(batches)} — {pct}%")
+                    time.sleep(0.1)  # Small delay to avoid 429
 
-                    progress.empty()
-                    if success_count:
-                        st.success(f"✅ {success_count} URLs submitted successfully!")
-                    if fail_count:
-                        st.error(f"❌ {fail_count} URLs failed.")
+                progress.empty()
+                if success_count:
+                    st.success(f"✅ {success_count} URLs submitted successfully!")
+                if fail_count:
+                    st.error(f"❌ {fail_count} URLs failed.")
 
 # ── Tab 3: Sitemap ────────────────────────────────────────────────────
 with tab_sitemap:
@@ -680,43 +688,39 @@ with tab_sitemap:
             use_container_width=True,
             disabled=len(st.session_state.sitemap_urls) == 0,
         ):
-            if not api_key:
-                st.error("⚠️ Set your API key once in **Settings** (sidebar) to submit.")
+            if not api_key or not host:
+                st.error("⚠️ Please configure your API key and host in the sidebar.")
             else:
                 urls = st.session_state.sitemap_urls
-                host = _host_from_url(urls[0]) if urls else ""
-                if not host:
-                    st.error("⚠️ Could not get host from sitemap URLs.")
-                else:
-                    progress = st.progress(0, text="Submitting sitemap URLs…")
-                    batch_size = min(500, len(urls))
-                    batches = [urls[i : i + batch_size] for i in range(0, len(urls), batch_size)]
-                    success_count = 0
-                    fail_count = 0
+                progress = st.progress(0, text="Submitting sitemap URLs…")
+                batch_size = min(500, len(urls))
+                batches = [urls[i : i + batch_size] for i in range(0, len(urls), batch_size)]
+                success_count = 0
+                fail_count = 0
 
-                    for idx, batch in enumerate(batches):
-                        result = submit_bulk_urls(api_key, host, batch, key_location)
-                        if result["status"] in (200, 202):
-                            success_count += len(batch)
-                            for u in batch:
-                                st.session_state.results.insert(
-                                    0, {"url": u, "status": result["status"], "message": result["message"]}
-                                )
-                        else:
-                            fail_count += len(batch)
-                            for u in batch:
-                                st.session_state.results.insert(
-                                    0, {"url": u, "status": result["status"], "message": result["message"]}
-                                )
-                        pct = int(((idx + 1) / len(batches)) * 100)
-                        progress.progress(pct, text=f"Batch {idx+1}/{len(batches)} — {pct}%")
-                        time.sleep(0.1)
+                for idx, batch in enumerate(batches):
+                    result = submit_bulk_urls(api_key, host.strip(), batch, key_location)
+                    if result["status"] in (200, 202):
+                        success_count += len(batch)
+                        for u in batch:
+                            st.session_state.results.insert(
+                                0, {"url": u, "status": result["status"], "message": result["message"]}
+                            )
+                    else:
+                        fail_count += len(batch)
+                        for u in batch:
+                            st.session_state.results.insert(
+                                0, {"url": u, "status": result["status"], "message": result["message"]}
+                            )
+                    pct = int(((idx + 1) / len(batches)) * 100)
+                    progress.progress(pct, text=f"Batch {idx+1}/{len(batches)} — {pct}%")
+                    time.sleep(0.1)
 
-                    progress.empty()
-                    if success_count:
-                        st.success(f"✅ {success_count} sitemap URLs submitted!")
-                    if fail_count:
-                        st.error(f"❌ {fail_count} URLs failed.")
+                progress.empty()
+                if success_count:
+                    st.success(f"✅ {success_count} sitemap URLs submitted!")
+                if fail_count:
+                    st.error(f"❌ {fail_count} URLs failed.")
 
     # Show fetched URLs preview
     if st.session_state.sitemap_urls:
@@ -747,13 +751,12 @@ with tab_curl:
     )
 
     if st.button("⚡ Generate Curl Command", key="btn_gen_curl", use_container_width=True):
-        if not api_key:
-            st.error("⚠️ Set your API key in **Settings** (sidebar) first.")
+        if not api_key or not host:
+            st.error("⚠️ Configure API key and host in the sidebar first.")
         else:
             bulk_urls = [u.strip() for u in curl_bulk_text.strip().split("\n") if u.strip().startswith("http")]
             if bulk_urls:
-                host = _host_from_url(bulk_urls[0])
-                cmd = generate_curl_bulk(api_key, host, bulk_urls, key_location) if host else None
+                cmd = generate_curl_bulk(api_key, host.strip(), bulk_urls, key_location)
             elif curl_url and curl_url.strip().startswith("http"):
                 cmd = generate_curl_single(api_key, curl_url.strip(), key_location)
             else:
